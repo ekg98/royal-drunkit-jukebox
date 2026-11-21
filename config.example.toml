@@ -1,0 +1,17 @@
+# Copy this file to config.toml and edit it. Anything you give on the command line wins over this file.
+
+# Folder that holds your music. Sub-folders are scanned too.
+music_dir = "music"
+
+# Where the jukebox keeps its catalog, extracted cover art and saved host settings.
+data_dir = "data"
+
+# Web port. Phones and tablets open http://<this computer's address>:8080
+port = 8080
+
+# PIN for the Host panel. Change it.
+host_pin = "1234"
+
+# Audio output for mpv. Leave out to use the system's default (for example the headphone jack).
+# Run "python3 run.py --list-audio-devices" to see the choices.
+# audio_device = "alsa/plughw:CARD=PCH,DEV=0"
