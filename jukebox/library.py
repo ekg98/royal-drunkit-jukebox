@@ -37,6 +37,13 @@ CREATE TABLE IF NOT EXISTS songs (
     last_played REAL
 );
 CREATE TABLE IF NOT EXISTS play_log (song_id INTEGER NOT NULL, ts REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS tidy_cache (
+    key TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    year INTEGER,
+    genre TEXT NOT NULL DEFAULT '',
+    checked REAL NOT NULL
+);
 CREATE INDEX IF NOT EXISTS play_log_ts ON play_log (ts);
 """
 
@@ -295,6 +302,7 @@ class Library:
                 conn.execute("DELETE FROM play_log WHERE song_id = ?", (song_id,))
             report.removed = len(gone)
             report.covers_linked = self._find_late_folder_art(conn) + self._apply_album_covers(conn)
+            report.covers_linked += self._apply_tidy_cache(conn)
             conn.commit()
         finally:
             conn.close()
@@ -329,7 +337,7 @@ class Library:
         else:
             embedded_key = _key("file", rel)
             folder_key = _key("dir", str(Path(rel).parent))
-        for key in ((embedded_key,) if tags.has_art else ()) + (folder_key,):
+        for key in (embedded_key, folder_key):
             if (self.covers_dir / f"{key}.jpg").exists():
                 return f"{key}.jpg"
         if tags.has_art and self._extract_cover(path, embedded_key):
@@ -389,3 +397,97 @@ class Library:
                 conn.execute("UPDATE songs SET cover = ? WHERE id = ?", (f"{key}.jpg", row["id"]))
                 linked += 1
         return linked
+
+    # ---------- "Tidy my library": filling in what the files themselves do not say ----------
+
+    @staticmethod
+    def _tidy_key(row) -> str:
+        if row["album"]:
+            return _key("album", (row["album_artist"] or row["artist"]).lower(), row["album"].lower())
+        return _key("file", row["path"])
+
+    def tidy_groups(self, retry_days: float = 30, force: bool = False) -> list[dict]:
+        """Albums (or loose songs) that are missing a cover, a year or a genre and are worth looking up.
+
+        Something already looked up (found or not) is left alone for `retry_days` unless `force` is set.
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT id, path, title, artist, album, album_artist, genre, year, cover FROM songs "
+                "WHERE cover IS NULL OR year IS NULL OR genre = '' ORDER BY path").fetchall()
+            cache = {r["key"]: r for r in conn.execute("SELECT key, status, checked FROM tidy_cache")}
+        finally:
+            conn.close()
+        cutoff = time.time() - retry_days * 86400
+        groups: dict[str, dict] = {}
+        for row in rows:
+            artist = row["album_artist"] or row["artist"]
+            if not artist or artist == tagmod.UNKNOWN_ARTIST or not (row["album"] or row["title"]):
+                continue
+            key = self._tidy_key(row)
+            cached = cache.get(key)
+            if cached and not force and cached["checked"] > cutoff:
+                continue
+            group = groups.setdefault(key, {
+                "key": key, "album": row["album"], "artist": artist, "title": row["title"] if not row["album"] else "",
+                "song_ids": [], "need_cover": False, "need_year": False, "need_genre": False})
+            group["song_ids"].append(row["id"])
+            group["need_cover"] |= row["cover"] is None
+            group["need_year"] |= row["year"] is None
+            group["need_genre"] |= row["genre"] == ""
+        return list(groups.values())
+
+    def tidy_store(self, group: dict, found: bool, *, year: int | None = None, genre: str = "",
+                   cover_file: Path | None = None) -> dict:
+        """Save one lookup result. Only blanks are filled; anything the files already say is kept."""
+        key = group["key"]
+        filled = {"cover": 0, "year": 0, "genre": 0}
+        has_cover = False
+        if cover_file is not None:
+            try:
+                has_cover = self._extract_cover(cover_file, key)
+            finally:
+                Path(cover_file).unlink(missing_ok=True)
+        conn = self._connect()
+        try:
+            with conn:
+                marks = ",".join("?" * len(group["song_ids"]))
+                ids = tuple(group["song_ids"])
+                if has_cover:
+                    filled["cover"] = conn.execute(
+                        f"UPDATE songs SET cover = ? WHERE cover IS NULL AND id IN ({marks})", (f"{key}.jpg",) + ids).rowcount
+                if year:
+                    filled["year"] = conn.execute(
+                        f"UPDATE songs SET year = ? WHERE year IS NULL AND id IN ({marks})", (int(year),) + ids).rowcount
+                if genre:
+                    filled["genre"] = conn.execute(
+                        f"UPDATE songs SET genre = ? WHERE genre = '' AND id IN ({marks})", (genre,) + ids).rowcount
+                conn.execute("INSERT OR REPLACE INTO tidy_cache (key, status, year, genre, checked) VALUES (?,?,?,?,?)",
+                             (key, "found" if found else "none", int(year) if year else None, genre, time.time()))
+        finally:
+            conn.close()
+        return filled
+
+    def tidy_reload(self) -> None:
+        self.reload(bump=True)
+
+    def _apply_tidy_cache(self, conn: sqlite3.Connection) -> int:
+        """After a rescan re-read a file's tags, put back the year and genre that were looked up earlier."""
+        fixed = 0
+        rows = conn.execute(
+            "SELECT id, path, artist, album, album_artist, year, genre FROM songs WHERE year IS NULL OR genre = ''").fetchall()
+        if not rows:
+            return 0
+        cache = {r["key"]: r for r in conn.execute("SELECT key, year, genre FROM tidy_cache WHERE status = 'found'")}
+        for row in rows:
+            hit = cache.get(self._tidy_key(row))
+            if not hit:
+                continue
+            if row["year"] is None and hit["year"]:
+                conn.execute("UPDATE songs SET year = ? WHERE id = ?", (hit["year"], row["id"]))
+                fixed += 1
+            if row["genre"] == "" and hit["genre"]:
+                conn.execute("UPDATE songs SET genre = ? WHERE id = ?", (hit["genre"], row["id"]))
+                fixed += 1
+        return fixed

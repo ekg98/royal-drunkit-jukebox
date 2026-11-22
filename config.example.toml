@@ -15,3 +15,7 @@ host_pin = "1234"
 # Audio output for mpv. Leave out to use the system's default (for example the headphone jack).
 # Run "python3 run.py --list-audio-devices" to see the choices.
 # audio_device = "alsa/plughw:CARD=PCH,DEV=0"
+
+# Optional: your email address or web page. "Tidy my library" sends it to MusicBrainz so they can contact you
+# if the jukebox ever misbehaves. Leave it empty if you prefer; it works either way.
+# contact = "you@example.com"

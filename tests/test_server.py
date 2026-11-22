@@ -139,6 +139,26 @@ class ServerTest(unittest.TestCase):
         self.post("/api/host/logout", {}, headers)
         self.assertEqual(self.post("/api/host/control", {"action": "skip"}, headers).status_code, 403)
 
+    def test_tidy_endpoints_are_host_only_and_work(self):
+        class FakeTidy:
+            def __init__(self): self.started = 0; self.cancelled = 0
+            def status(self): return {"running": self.started > 0, "done": 0, "total": 2}
+            def preview(self, force=False): return {"albums": 2, "seconds": 6}
+            def start(self, force=False, log=print): self.started += 1; return True
+            def cancel(self): self.cancelled += 1
+        for path in ("/api/host/tidy", "/api/host/tidy/preview", "/api/host/tidy/cancel"):
+            self.assertEqual(self.post(path, {}).status_code, 403)               # guests are refused
+        headers = self.host_headers()
+        self.assertEqual(self.post("/api/host/tidy", {}, headers).status_code, 404)   # not set up
+        tidy = self.engine.tidy = FakeTidy()
+        self.assertEqual(self.post("/api/host/tidy/preview", {}, headers).get_json()["albums"], 2)
+        reply = self.post("/api/host/tidy", {"force": True}, headers).get_json()
+        self.assertTrue(reply["started"])
+        self.assertTrue(reply["state"]["tidy"]["running"])
+        self.post("/api/host/tidy/cancel", {}, headers)
+        self.assertEqual((tidy.started, tidy.cancelled), (1, 1))
+        self.assertNotIn("tidy", self.client.get("/api/state", headers=GUEST).get_json()["state"])
+
     def test_popular(self):
         self.post("/api/queue", {"song_id": 5})
         self.assertEqual(self.client.get("/api/popular").get_json()["ids"], [5])

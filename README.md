@@ -3,9 +3,9 @@
 A free, TouchTunes-style jukebox you run on your own computer or a Raspberry Pi. Guests pick songs from a phone or tablet
 web page; the host controls credits, free play and party modes.
 
-**Status: stage 2 of 3.** The library scanner, queue, credits, voting, party modes, host panel, the neon web page and
-real playback (through mpv, to the computer's audio output such as the headphone jack) are built. Not yet built:
-several Bluetooth speakers at once, and "Tidy my library" (look up missing song info and cover art online).
+**Status:** The library scanner, queue, credits, voting, party modes, host panel, the neon web page, real playback
+(through mpv, to the computer's audio output such as the headphone jack) and "Tidy my library" (look up missing cover
+art, years and genres online) are built. Not yet built: several Bluetooth speakers at once.
 
 ## What you need
 
@@ -51,6 +51,21 @@ few minutes; later scans only read new or changed files).
 
 Options: `--port`, `--host`, `--data`, `--no-scan`, `--song-seconds N` (make every simulated song N seconds, handy for testing).
 
+## Tidy my library
+
+Host panel, **Tidy my library**. It looks up what your files are missing, using MusicBrainz and the Cover Art Archive
+(both free, no account). It needs the internet only while it runs.
+
+- Fills in **cover art, year and genre**. Your music files are never changed; results go in the jukebox's own data folder.
+- Only blanks are filled. A cover, year or genre your files already have is never replaced.
+- Looks up each album once (not each song). A result is used only if the album name and the artist both match, so
+  you get a missing cover rather than a wrong one. Songs with no album tag are looked up by title and artist.
+- It goes about one album every 3 seconds (MusicBrainz asks for no more than one request per second), so 300 albums take
+  about 15 minutes. You can leave the page; use **Stop tidying** to end it early. The jukebox keeps playing.
+- Albums that were not found are not asked about again for 30 days. Fix the tags or add a `cover.jpg`, then rescan.
+- A song's `Unknown Artist` or missing title cannot be looked up. Fix those tags in the file (Asunder or Kid3 can do it).
+- Optional: put `contact = "you@example.com"` in `config.toml`; it is sent to MusicBrainz as a courtesy.
+
 ## How it behaves
 
 - Guests get 3 credits (max 5, one new credit every 2 minutes). Add = 1 credit, Play next = 2. Host can switch to **free play**.
@@ -67,11 +82,11 @@ Options: `--port`, `--host`, `--data`, `--no-scan`, `--song-seconds N` (make eve
 python -m unittest discover -s tests -t .
 ```
 
-(89 tests; they need ffmpeg because they build real audio files. The mpv player is tested against a stand-in mpv.)
+(104 tests; they need ffmpeg because they build real audio files. The mpv player is tested against a stand-in mpv.)
 
 ## Layout
 
-- `jukebox/` — config, tag reader, library, engine (all the rules), players (mpv and simulated), web server
+- `jukebox/` — config, tag reader, library, engine (all the rules), players (mpv and simulated), web server, `tidy.py` (online lookups)
 - `static/index.html` — the neon page. If it cannot reach a server it runs as a demo with made-up songs.
 - `tools/make_sample_music.py` — fake songs for trying things out
 

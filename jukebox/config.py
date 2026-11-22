@@ -25,6 +25,7 @@ class Config:
     audio_device: str | None = None
     simulate: bool = False
     list_audio: bool = False
+    contact: str = ""
 
 
 def load(argv: list[str] | None = None) -> Config:
@@ -72,4 +73,5 @@ def load(argv: list[str] | None = None) -> Config:
         audio_device=args.audio_device or values.get("audio_device") or None,
         simulate=bool(args.simulate or args.song_seconds or values.get("simulate", False)),
         list_audio=args.list_audio_devices,
+        contact=str(values.get("contact", "")),
     )

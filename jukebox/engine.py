@@ -89,6 +89,7 @@ class Engine:
     def __init__(self, library, player, settings_path: Path | str | None, host_pin: str,
                  clock=time.time, rng: random.Random | None = None):
         self.lib = library
+        self.tidy = None          # set by run.py: the "Tidy my library" helper
         self.player = player
         self.host_pin = str(host_pin)
         self.clock = clock
@@ -487,4 +488,5 @@ class Engine:
                 state["settings"] = dict(self.settings)
                 state["modes"] = self.mode_options()
                 state["scan"] = self.lib.scan_status()
+                state["tidy"] = self.tidy.status() if self.tidy else None
             return state

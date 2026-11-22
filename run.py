@@ -16,6 +16,7 @@ from jukebox.library import Library
 from jukebox.player import MpvPlayer, NullPlayer, PlayerUnavailable, list_audio_devices
 from jukebox.server import create_app
 from jukebox.tags import ToolMissing, require_tools
+from jukebox.tidy import Tidy
 
 
 def lan_address() -> str | None:
@@ -73,6 +74,7 @@ def main() -> int:
 
     player = make_player(config)
     engine = Engine(library, player, config.data_dir / "settings.json", config.host_pin)
+    engine.tidy = Tidy(library, contact=config.contact)
     engine.start()
     app = create_app(engine, library, ROOT / "static")
 

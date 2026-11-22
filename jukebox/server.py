@@ -148,4 +148,28 @@ def create_app(engine: Engine, library, static_dir: Path | str) -> Flask:
         started = library.scan_async(log=print)
         return jsonify(ok=True, started=started, state=state())
 
+    def require_tidy():
+        if engine.tidy is None:
+            raise EngineError("no_tidy", "Tidy my library is not available.", 404)
+        return engine.tidy
+
+    @app.post("/api/host/tidy")
+    def host_tidy():
+        require_host()
+        tidy = require_tidy()
+        data = body()
+        started = tidy.start(force=bool(data.get("force")), log=print)
+        return jsonify(ok=True, started=started, state=state())
+
+    @app.post("/api/host/tidy/preview")
+    def host_tidy_preview():
+        require_host()
+        return jsonify(ok=True, **require_tidy().preview(force=bool(body().get("force"))))
+
+    @app.post("/api/host/tidy/cancel")
+    def host_tidy_cancel():
+        require_host()
+        require_tidy().cancel()
+        return jsonify(ok=True, state=state())
+
     return app
