@@ -9,6 +9,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import __version__
+
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PIN = "1234"
 
@@ -30,6 +32,7 @@ class Config:
 
 def load(argv: list[str] | None = None) -> Config:
     parser = argparse.ArgumentParser(description="The Royal Drunkit Jukebox")
+    parser.add_argument("--version", action="version", version=f"The Royal Drunkit Jukebox {__version__}")
     parser.add_argument("--config", type=Path, default=ROOT / "config.toml",
                         help="settings file (default: config.toml next to run.py)")
     parser.add_argument("--music", type=Path, help="folder that holds your music files")

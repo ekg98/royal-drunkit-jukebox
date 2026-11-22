@@ -1,5 +1,7 @@
 # The Royal Drunkit Jukebox
 
+Version 0.4.1 (see [CHANGELOG.md](CHANGELOG.md); `python3 run.py --version` shows the installed one).
+
 A free, TouchTunes-style jukebox you run on your own computer or a Raspberry Pi. Guests pick songs from a phone or tablet
 web page; the host controls credits, free play and party modes.
 
@@ -49,7 +51,86 @@ Cover art comes from embedded pictures, or `cover.jpg` / `folder.jpg` in the alb
 After adding music, open the Host panel and press **Rescan music folder** (the first scan of thousands of songs takes a
 few minutes; later scans only read new or changed files).
 
-Options: `--port`, `--host`, `--data`, `--no-scan`, `--song-seconds N` (make every simulated song N seconds, handy for testing).
+Every option is listed in [All the switches](#all-the-switches) below.
+
+## All the switches
+
+There are four places to change how the jukebox behaves. Later ones win over earlier ones where they overlap.
+
+### 1. Command-line options (`python3 run.py ...`)
+
+| Option | What it does | Default |
+|---|---|---|
+| `--music FOLDER` | Folder that holds your music (sub-folders are scanned) | `music` next to `run.py` |
+| `--data FOLDER` | Where the catalog, cover art and saved Host settings are kept | `data` next to `run.py` |
+| `--port N` | Web port | `8080` |
+| `--host ADDRESS` | Network address to listen on (`127.0.0.1` = this computer only) | `0.0.0.0` (everything on your network) |
+| `--pin PIN` | PIN for the Host panel | `1234` |
+| `--audio-device NAME` | Audio output for mpv | the system's default output |
+| `--list-audio-devices` | Print the outputs mpv can use, then exit | |
+| `--simulate` | No sound, pretend to play (for testing) | off |
+| `--song-seconds N` | Pretend every song lasts N seconds (turns on `--simulate`) | real length |
+| `--no-scan` | Skip scanning the music folder at startup | scan on |
+| `--config FILE` | Use this settings file | `config.toml` next to `run.py` |
+| `--version` | Print the version, then exit | |
+| `--help` | Show the short help, then exit | |
+
+### 2. `config.toml` (copy `config.example.toml` and edit; a command-line option wins over it)
+
+| Setting | What it does | Default |
+|---|---|---|
+| `music_dir` | Same as `--music` | `"music"` |
+| `data_dir` | Same as `--data` | `"data"` |
+| `port` | Same as `--port` | `8080` |
+| `host` | Same as `--host` | `"0.0.0.0"` |
+| `host_pin` | Same as `--pin`. Change it. | `"1234"` |
+| `audio_device` | Same as `--audio-device` | system default |
+| `simulate` | `true` = no sound (same as `--simulate`) | `false` |
+| `contact` | Your email or web page, sent to MusicBrainz by "Tidy my library" as a courtesy | empty |
+
+Relative folders in `config.toml` are relative to the file's own folder.
+
+### 3. Host panel (unlock with the PIN; saved in the data folder, so every screen shares them)
+
+| Setting | Choices | Default |
+|---|---|---|
+| Master volume | 0 to 100 (mpv's volume) | 75 |
+| Guest play | Credits, or Free play | Credits |
+| Party mode | Anything goes, a decade night, or a genre night (only the decades and genres your library has) | Anything goes |
+| Auto-fill when the queue is empty | on / off | on |
+| Most credits a guest can hold | 3, 5, 8, 10 | 5 |
+| A new credit arrives every | 1, 2, 5, 10 minutes | 2 minutes |
+| Votes needed to skip | 2 to 6 | 3 |
+
+Two more settings are not in the panel because they rarely change. Stop the jukebox, edit (or create) `settings.json` in the data
+folder, and start it again: `start_credits` (credits a new guest starts with, 0 to 20, default 3) and `queue_max`
+(songs guests can queue, 1 to 50, default 10).
+
+| Button | What it does |
+|---|---|
+| Pause / Play, Skip now, Clear queue | Control what is playing and the queue (host songs cost no credits) |
+| Rescan music folder | Reads new or changed files (the first scan of thousands of songs takes a few minutes) |
+| Tidy my library / Stop tidying | Looks up missing cover art, years and genres online; see [Tidy my library](#tidy-my-library) |
+| Never play this song | Bans the song that is playing right now and moves on |
+| Show never-play list | Shows the banned songs so you can allow them again; see [Never-play list](#never-play-list) |
+| Preview idle screen | Shows the idle screen right now |
+| Lock host | Ends the host session on this screen |
+
+### 4. Per screen (remembered by that phone, tablet or TV's browser; other screens are not affected)
+
+| Setting | Choices | Default |
+|---|---|---|
+| Show the idle screen after | Never, 1, 2 or 5 minutes without a touch | 2 minutes |
+| Idle screen style | Mixed, Floating covers, Cover wall, Spotlight, Spinning record, Coming up, Neon horizon, Neon cubes, Neon dream, Starfield | Mixed |
+| TV view background | Mixed, Glow only, Neon horizon, Neon cubes, Neon dream, Starfield | Mixed |
+| Visualizer style | Mixed, Bars, Mirror, Wave, Dots | Mixed |
+
+"Mixed" rotates through the styles. Screens that ask for reduced motion get a calm version automatically.
+
+### Fixed rules (not switches)
+
+Add a song = 1 credit, Play next = 2. A song cannot be queued twice. A guest's phone is remembered by a random id in
+its browser. The host session lasts 12 hours. Five wrong PINs lock the Host panel for one minute.
 
 ## Tidy my library
 
@@ -94,13 +175,14 @@ Keep songs (or whole albums) from ever playing, for example the one nobody wants
 python -m unittest discover -s tests -t .
 ```
 
-(112 tests; they need ffmpeg because they build real audio files. The mpv player is tested against a stand-in mpv.)
+(117 tests; they need ffmpeg because they build real audio files. The mpv player is tested against a stand-in mpv.)
 
 ## Layout
 
 - `jukebox/` — config, tag reader, library, engine (all the rules), players (mpv and simulated), web server, `tidy.py` (online lookups)
 - `static/index.html` — the neon page. If it cannot reach a server it runs as a demo with made-up songs.
 - `tools/make_sample_music.py` — fake songs for trying things out
+- `CHANGELOG.md` — what changed in each version
 
 The page loads two fonts from Google Fonts; with no internet it falls back to system fonts.
 The built-in web server is Flask's development server, fine for a basement on a home network.

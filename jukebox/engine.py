@@ -17,6 +17,7 @@ from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import __version__
 from .library import decade_label
 
 
@@ -508,4 +509,5 @@ class Engine:
                 state["scan"] = self.lib.scan_status()
                 state["tidy"] = self.tidy.status() if self.tidy else None
                 state["banned_count"] = self.lib.banned_count()
+                state["version"] = __version__
             return state

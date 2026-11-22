@@ -441,6 +441,7 @@
       <p class="hint" id="scanMsg" hidden></p>
       <p class="hint" id="tidyMsg" hidden></p>
       <p class="hint" id="banMsg" hidden></p>
+      <p class="hint" id="verMsg"></p>
       <p class="hint" id="volHint">Volume has no effect in this preview. On the real jukebox it controls the Pi's output. Hosts play without spending credits.</p>
     </div>
   </div>
@@ -546,6 +547,7 @@
   var loaded = false;
   var libVersion = -1;
   var popularIds = [];
+  var PAGE_VERSION = '0.4.1';
   var RAW = [], SONGS = [], BYID = {}, ARTISTS = [], POP = [], FRESH = [], GENRES = [], DECADES = [];
   var GENRE_COUNT = {}, DECADE_COUNT = {}, MODES = {};
   var PLACEHOLDER = { id: -1, title: 'Unknown song', artist: '', genre: '', decade: '', dur: 0, hue: 260, motif: 0, added: 999, plays: 0, cover: null };
@@ -676,7 +678,7 @@
     queue: [], queueMax: 10,
     votes: 0, voted: false,
     host: false, voteNeed: 3, autofill: true, mode: 'all', volume: 75,
-    credits: 3, creditMax: 5, refillMin: 2, nextCredit: 0, freePlay: false, scan: null, tidy: null, bannedCount: 0, banned: false,
+    credits: 3, creditMax: 5, refillMin: 2, nextCredit: 0, freePlay: false, scan: null, tidy: null, version: '', bannedCount: 0, banned: false,
     attractMin: 2,
     q: '', genre: 'All', decade: 'All', artist: '', letter: '', sort: 'az', limit: PAGE,
     view: 'home', kb: false, qExpanded: false, tv: false
@@ -1412,6 +1414,12 @@
     scanMsg.textContent = scanText();
     scanMsg.hidden = !LIVE || !scanMsg.textContent;
     $('hostRescan').disabled = !!(state.scan && state.scan.running);
+    var ver = $('verMsg');
+    if (!LIVE) ver.textContent = 'Preview page, version ' + PAGE_VERSION + '.';
+    else if (!state.version) ver.textContent = 'Page version ' + PAGE_VERSION + '.';
+    else if (state.version === PAGE_VERSION) ver.textContent = 'Jukebox version ' + state.version + '.';
+    else ver.textContent = 'Version mismatch: the jukebox is ' + state.version + ' but this page is ' + PAGE_VERSION +
+      '. Copy the matching static/index.html (or the whole new folder), restart the jukebox and refresh with Ctrl+Shift+R.';
     $('hostBanNow').hidden = !LIVE || state.current === null;
     $('hostBanList').hidden = !LIVE || !state.bannedCount;
     $('banMsg').hidden = !LIVE;
@@ -2295,7 +2303,7 @@
     }
     var sig = JSON.stringify([np && [np.id, np.auto, np.playing], st.queue, st.votes, st.voted, st.vote_need, st.credits.have,
       st.credits.max, st.free_play, st.queue_max, st.autofill, st.mode, st.host, st.settings || 0,
-      st.scan ? [st.scan.running, st.scan.done, st.scan.total, st.scan.last_report] : 0, st.tidy || 0, st.banned_count || 0]);
+      st.scan ? [st.scan.running, st.scan.done, st.scan.total, st.scan.last_report] : 0, st.tidy || 0, st.banned_count || 0, st.version || '']);
     if (sig === lastSig) return;
     lastSig = sig;
     state.current = np ? np.id : null;
@@ -2312,6 +2320,7 @@
     var wasHost = state.host;
     state.host = !!st.host;
     state.bannedCount = st.banned_count || 0;
+    state.version = st.version || '';
     if (wasHost !== state.host && LIVE && RAW.length) { setLibrary(RAW); finishLibrary(); renderBrowse(); }
     if (!state.host && hostToken) setHostToken('');                  // the session ended, or the jukebox restarted
     if (st.settings) {

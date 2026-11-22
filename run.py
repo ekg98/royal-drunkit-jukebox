@@ -10,6 +10,7 @@ from __future__ import annotations
 import socket
 import sys
 
+from jukebox import __version__
 from jukebox.config import DEFAULT_PIN, ROOT, load
 from jukebox.engine import Engine
 from jukebox.library import Library
@@ -79,6 +80,7 @@ def main() -> int:
     app = create_app(engine, library, ROOT / "static")
 
     print()
+    print(f"The Royal Drunkit Jukebox {__version__}")
     if player.name == "simulated":
         print("NOTE: playback is simulated. The queue, credits and screens are real, but no sound comes out.")
     else:
