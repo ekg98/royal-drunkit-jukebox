@@ -179,8 +179,12 @@
   .qmark svg { width: 38%; height: 38%; fill: currentColor; filter: drop-shadow(0 0 8px var(--cyan)); }
   .tile.queued .qmark { display: grid; }
 
-  .newtag, .autotag, .youtag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-family: var(--display); font-size: 11px; letter-spacing: 0.1em; vertical-align: middle; }
+  .newtag, .autotag, .youtag, .bantag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-family: var(--display); font-size: 11px; letter-spacing: 0.1em; vertical-align: middle; }
   .newtag { color: #0b0716; background: var(--cyan); }
+  .bantag { color: #fff; background: #b3123f; }
+  .art .bantag { position: absolute; top: 8px; left: 8px; z-index: 1; margin: 0; }
+  .tile.banned .cover { filter: grayscale(1) brightness(0.5); }
+  .tile.banned .t, .tile.banned .a { opacity: 0.6; text-decoration: line-through; }
   .autotag { color: var(--violet); border: 1px solid var(--violet); }
   .youtag { color: var(--pink); border: 1px solid var(--pink); }
 
@@ -428,12 +432,15 @@
         <button class="pillbtn" id="hostRescan" type="button" hidden>Rescan music folder</button>
         <button class="pillbtn" id="hostTidy" type="button" hidden>Tidy my library</button>
         <button class="pillbtn" id="hostTidyStop" type="button" hidden>Stop tidying</button>
+        <button class="pillbtn" id="hostBanNow" type="button" hidden>Never play this song</button>
+        <button class="pillbtn" id="hostBanList" type="button" hidden>Show never-play list</button>
         <button class="pillbtn" id="demoAttract" type="button">Preview idle screen</button>
         <button class="pillbtn" id="demoRefill" type="button">Demo: refill credits</button>
         <button class="pillbtn" id="hostLock" type="button">Lock host</button>
       </div>
       <p class="hint" id="scanMsg" hidden></p>
       <p class="hint" id="tidyMsg" hidden></p>
+      <p class="hint" id="banMsg" hidden></p>
       <p class="hint" id="volHint">Volume has no effect in this preview. On the real jukebox it controls the Pi's output. Hosts play without spending credits.</p>
     </div>
   </div>
@@ -539,7 +546,7 @@
   var loaded = false;
   var libVersion = -1;
   var popularIds = [];
-  var SONGS = [], BYID = {}, ARTISTS = [], POP = [], FRESH = [], GENRES = [], DECADES = [];
+  var RAW = [], SONGS = [], BYID = {}, ARTISTS = [], POP = [], FRESH = [], GENRES = [], DECADES = [];
   var GENRE_COUNT = {}, DECADE_COUNT = {}, MODES = {};
   var PLACEHOLDER = { id: -1, title: 'Unknown song', artist: '', genre: '', decade: '', dur: 0, hue: 260, motif: 0, added: 999, plays: 0, cover: null };
 
@@ -579,6 +586,7 @@
       a.genres[s.genre] = (a.genres[s.genre] || 0) + 1;
       if (!a.cover && s.cover) a.cover = s.cover;
     });
+    RAW.forEach(function (s) { if (!BYID[s.id]) BYID[s.id] = s; });          // songs on the never-play list stay known
     GENRE_COUNT = gc; DECADE_COUNT = dc;
     GENRES = Object.keys(gc).filter(function (g) { return g !== 'Unknown'; })
       .sort(function (a, b) { return gc[b] - gc[a] || a.localeCompare(b); });
@@ -599,7 +607,7 @@
     var genre = String(r.genre || 'Unknown');
     var h = hashStr(artist + '|' + (r.album || title));
     var s = {
-      id: r.id, title: title, artist: artist, genre: genre, year: r.year || null, decade: decadeOf(r.year),
+      id: r.id, title: title, artist: artist, album: String(r.album || ''), banned: !!r.banned, genre: genre, year: r.year || null, decade: decadeOf(r.year),
       dur: +r.dur || 0, plays: +r.plays || 0,
       added: Math.max(0, (Date.now() / 1000 - (+r.added || 0)) / 86400),      // days ago, so newest sorts first
       cover: (typeof r.cover === 'string' && /^[0-9a-f]{16}\.jpg$/.test(r.cover)) ? r.cover : null,
@@ -607,6 +615,11 @@
     };
     s.search = (title + ' ' + artist + ' ' + (r.album || '') + ' ' + genre + ' ' + s.decade + ' ' + (r.year || '')).toLowerCase();
     return s;
+  }
+  /* Songs on the never-play list are hidden from guests; the host sees them dimmed so they can be allowed again. */
+  function setLibrary(list) {
+    RAW = list;
+    SONGS = list.filter(function (s) { return !s.banned || state.host; });
   }
   function sortSongs(list) {
     return list.sort(function (a, b) { return a.title.localeCompare(b.title) || a.artist.localeCompare(b.artist); });
@@ -663,7 +676,7 @@
     queue: [], queueMax: 10,
     votes: 0, voted: false,
     host: false, voteNeed: 3, autofill: true, mode: 'all', volume: 75,
-    credits: 3, creditMax: 5, refillMin: 2, nextCredit: 0, freePlay: false, scan: null, tidy: null,
+    credits: 3, creditMax: 5, refillMin: 2, nextCredit: 0, freePlay: false, scan: null, tidy: null, bannedCount: 0, banned: false,
     attractMin: 2,
     q: '', genre: 'All', decade: 'All', artist: '', letter: '', sort: 'az', limit: PAGE,
     view: 'home', kb: false, qExpanded: false, tv: false
@@ -854,7 +867,8 @@
     b.setAttribute('aria-label', s.title + ' by ' + s.artist + '. Open options');
     var art = el('div', 'art');
     art.appendChild(coverEl(s, 0));
-    if (s.added <= 14) art.appendChild(el('span', 'newtag', 'NEW'));
+    if (s.banned) { art.appendChild(el('span', 'bantag', 'NEVER PLAY')); b.classList.add('banned'); }
+    else if (s.added <= 14) art.appendChild(el('span', 'newtag', 'NEW'));
     var qm = el('span', 'qmark'); qm.innerHTML = ICON.check; art.appendChild(qm);
     b.appendChild(art);
     b.appendChild(el('span', 't', s.title));
@@ -881,7 +895,7 @@
   }
 
   function goSongs(opts) {
-    state.genre = 'All'; state.decade = 'All'; state.artist = ''; state.letter = ''; state.sort = 'az';
+    state.genre = 'All'; state.decade = 'All'; state.artist = ''; state.letter = ''; state.sort = 'az'; state.banned = false;
     for (var k in opts) state[k] = opts[k];
     state.view = 'songs'; state.limit = PAGE;
     renderBrowse();
@@ -893,6 +907,7 @@
       if (state.genre !== 'All' && s.genre !== state.genre) return false;
       if (state.decade !== 'All' && s.decade !== state.decade) return false;
       if (state.artist && s.artist !== state.artist) return false;
+      if (state.banned && !s.banned) return false;
       if (state.letter && s.title.charAt(0).toUpperCase() !== state.letter) return false;
       for (var i = 0; i < terms.length; i++) { if (s.search.indexOf(terms[i]) === -1) return false; }
       return true;
@@ -993,6 +1008,13 @@
       chip.addEventListener('click', function () { state.artist = ''; re(); });
       bar.appendChild(chip);
     }
+    if (state.banned) {
+      var bchip = el('button', 'chip active', 'Never-play list  ✕');
+      bchip.type = 'button';
+      bchip.setAttribute('aria-label', 'Close the never-play list');
+      bchip.addEventListener('click', function () { state.banned = false; re(); });
+      bar.appendChild(bchip);
+    }
     v.appendChild(bar);
 
     if (!res.length) { v.appendChild(el('p', 'empty', 'No songs match. Try a different search or clear a filter.')); return; }
@@ -1039,7 +1061,7 @@
       var b = el('button', 'tab', p[1]); b.type = 'button';
       b.setAttribute('aria-pressed', String(state.view === p[0]));
       b.addEventListener('click', function () {
-        if (p[0] === 'songs' && state.view !== 'songs') { state.genre = 'All'; state.decade = 'All'; state.artist = ''; state.letter = ''; }
+        if (p[0] === 'songs' && state.view !== 'songs') { state.genre = 'All'; state.decade = 'All'; state.artist = ''; state.letter = ''; state.banned = false; }
         state.view = p[0]; state.limit = PAGE; renderBrowse();
       });
       box.appendChild(b);
@@ -1264,6 +1286,15 @@
 
   /* ---------- song sheet ---------- */
   var sheetId = null, sheetTrigger = null;
+  function setNeverPlay(s, scope, banned) {
+    liveCall('/api/host/never-play', { song_id: s.id, scope: scope, banned: banned }).then(function (d) {
+      if (!d.ok) return;
+      var what = scope === 'album' ? 'album' : 'song';
+      toast(banned ? 'Never-play: ' + (scope === 'album' ? s.album : s.title) : 'Allowed again: ' + (scope === 'album' ? s.album : s.title));
+      closeSheet();
+      return reloadLibrary();
+    });
+  }
   function openSheet(id, trigger) {
     sheetId = id; sheetTrigger = trigger || document.activeElement;
     buildSheet();
@@ -1286,8 +1317,8 @@
     info.appendChild(el('p', 'sheet-meta', [s.genre === 'Unknown' ? '' : s.genre, s.decade, fmt(s.dur)].filter(Boolean).join(' · ')));
     top.appendChild(info);
     b.appendChild(top);
-    var queued = inQueue(s.id);
-    var add = el('button', 'pillbtn pink block', queued ? 'Already playing or queued' : 'Add to queue · ' + costLabel(1));
+    var queued = inQueue(s.id) || s.banned;
+    var add = el('button', 'pillbtn pink block', s.banned ? 'On the never-play list' : queued ? 'Already playing or queued' : 'Add to queue · ' + costLabel(1));
     add.type = 'button'; add.disabled = queued;
     add.addEventListener('click', function () { Promise.resolve(addSong(s.id, 'add', add)).then(function (ok) { if (ok) closeSheet(); }); });
     b.appendChild(add);
@@ -1304,6 +1335,18 @@
       $('browse').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
     });
     b.appendChild(more);
+    if (LIVE && state.host) {
+      var ban = el('button', 'pillbtn block', s.banned ? 'Allow this song again' : 'Never play this song');
+      ban.type = 'button';
+      ban.addEventListener('click', function () { setNeverPlay(s, 'song', !s.banned); });
+      b.appendChild(ban);
+      if (s.album) {
+        var banAlbum = el('button', 'pillbtn block', (s.banned ? 'Allow the whole album again' : 'Never play this whole album'));
+        banAlbum.type = 'button';
+        banAlbum.addEventListener('click', function () { setNeverPlay(s, 'album', !s.banned); });
+        b.appendChild(banAlbum);
+      }
+    }
     var msg = el('p', 'sheetmsg'); msg.id = 'sheetMsg'; msg.setAttribute('role', 'status');
     b.appendChild(msg);
   }
@@ -1369,6 +1412,12 @@
     scanMsg.textContent = scanText();
     scanMsg.hidden = !LIVE || !scanMsg.textContent;
     $('hostRescan').disabled = !!(state.scan && state.scan.running);
+    $('hostBanNow').hidden = !LIVE || state.current === null;
+    $('hostBanList').hidden = !LIVE || !state.bannedCount;
+    $('banMsg').hidden = !LIVE;
+    $('banMsg').textContent = state.bannedCount
+      ? 'Never-play list: ' + state.bannedCount + (state.bannedCount === 1 ? ' song' : ' songs') + '. Guests cannot see or pick them, and auto-fill skips them.'
+      : 'Never-play list is empty. Open any song and choose "Never play" to keep it, or its whole album, from ever playing.';
     var tidyOn = !!(state.tidy && state.tidy.running);
     $('hostTidy').hidden = !LIVE || tidyOn || !state.tidy;
     $('hostTidyStop').hidden = !tidyOn;
@@ -1517,6 +1566,14 @@
       });
     });
   });
+  $('hostBanNow').addEventListener('click', function () {
+    var cur = state.current === null ? null : songOf(state.current);
+    if (!cur) return;
+    liveCall('/api/host/never-play', { song_id: cur.id, scope: 'song', banned: true }).then(function (d) {
+      if (d.ok) { toast('Never-play: ' + cur.title); reloadLibrary(); }
+    });
+  });
+  $('hostBanList').addEventListener('click', function () { closeHost(); goSongs({ banned: true }); $('browse').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }); });
   $('hostTidyStop').addEventListener('click', function () { liveCall('/api/host/tidy/cancel', {}); toast('Stopping after the current album…'); });
 
   /* ---------- TV view ---------- */
@@ -2238,7 +2295,7 @@
     }
     var sig = JSON.stringify([np && [np.id, np.auto, np.playing], st.queue, st.votes, st.voted, st.vote_need, st.credits.have,
       st.credits.max, st.free_play, st.queue_max, st.autofill, st.mode, st.host, st.settings || 0,
-      st.scan ? [st.scan.running, st.scan.done, st.scan.total, st.scan.last_report] : 0, st.tidy || 0]);
+      st.scan ? [st.scan.running, st.scan.done, st.scan.total, st.scan.last_report] : 0, st.tidy || 0, st.banned_count || 0]);
     if (sig === lastSig) return;
     lastSig = sig;
     state.current = np ? np.id : null;
@@ -2252,7 +2309,10 @@
     state.credits = st.credits.have; state.creditMax = st.credits.max;
     state.freePlay = !!st.free_play;
     state.autofill = !!st.autofill; state.mode = st.mode || 'all';
+    var wasHost = state.host;
     state.host = !!st.host;
+    state.bannedCount = st.banned_count || 0;
+    if (wasHost !== state.host && LIVE && RAW.length) { setLibrary(RAW); finishLibrary(); renderBrowse(); }
     if (!state.host && hostToken) setHostToken('');                  // the session ended, or the jukebox restarted
     if (st.settings) {
       state.volume = st.settings.volume; state.refillMin = st.settings.refill_min;
@@ -2266,7 +2326,7 @@
   function reloadLibrary() {
     return api('GET', '/api/songs').then(function (d) {
       if (!Array.isArray(d.songs) || typeof d.lib !== 'number') throw new Error('bad song list');
-      SONGS = sortSongs(d.songs.map(liveSong));
+      setLibrary(sortSongs(d.songs.map(liveSong)));
       libVersion = d.lib;
       finishLibrary();
       loaded = true;
@@ -2350,7 +2410,7 @@
       if (!Array.isArray(d.songs) || typeof d.lib !== 'number') throw new Error('this is not a jukebox server');
       settled = true; clearTimeout(timer);
       LIVE = true;
-      SONGS = sortSongs(d.songs.map(liveSong));
+      setLibrary(sortSongs(d.songs.map(liveSong)));
       libVersion = d.lib;
       startLive();
     }).catch(function (err) {

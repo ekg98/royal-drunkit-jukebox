@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS songs (
     cover TEXT,
     added REAL NOT NULL,
     plays INTEGER NOT NULL DEFAULT 0,
-    last_played REAL
+    last_played REAL,
+    banned INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS play_log (song_id INTEGER NOT NULL, ts REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS tidy_cache (
@@ -105,8 +106,15 @@ class Library:
         self._lock = threading.RLock()
         self._songs: list[dict] = []
         self._by_id: dict[int, dict] = {}
-        with self._connect() as conn:
-            conn.executescript(SCHEMA)
+        conn = self._connect()
+        try:
+            with conn:
+                conn.executescript(SCHEMA)
+                columns = {row["name"] for row in conn.execute("PRAGMA table_info(songs)")}
+                if "banned" not in columns:      # a catalog made by an older version of the jukebox
+                    conn.execute("ALTER TABLE songs ADD COLUMN banned INTEGER NOT NULL DEFAULT 0")
+        finally:
+            conn.close()
         self.reload(bump=False)
 
     # ---------- database ----------
@@ -139,7 +147,7 @@ class Library:
                 "album": row["album"], "album_artist": row["album_artist"],
                 "genre": canonical.get(row["genre"].lower(), "Unknown") if row["genre"] else "Unknown",
                 "year": row["year"], "dur": round(row["duration"], 1), "added": int(row["added"]),
-                "plays": row["plays"], "cover": row["cover"],
+                "plays": row["plays"], "cover": row["cover"], "banned": bool(row["banned"]),
             })
         with self._lock:
             self._songs = songs
@@ -163,7 +171,7 @@ class Library:
 
     def api_songs(self) -> list[dict]:
         """The songs as the web page sees them (no file paths)."""
-        keys = ("id", "title", "artist", "album", "genre", "year", "dur", "added", "plays", "cover")
+        keys = ("id", "title", "artist", "album", "genre", "year", "dur", "added", "plays", "cover", "banned")
         return [{k: s[k] for k in keys} for s in self._songs]
 
     def genres(self) -> list[tuple[str, int]]:
@@ -173,6 +181,39 @@ class Library:
     def decades(self) -> list[tuple[str, int]]:
         counts = Counter(decade_label(s["year"]) for s in self._songs if s["year"])
         return sorted(counts.items(), key=lambda kv: decade_start(kv[0]))
+
+    # ---------- the never-play list ----------
+
+    def banned_count(self) -> int:
+        return sum(1 for s in self._songs if s["banned"])
+
+    def album_ids(self, song_id: int) -> list[int]:
+        """The song itself plus every other song on the same album (same album name and artist)."""
+        song = self._by_id.get(song_id)
+        if song is None:
+            return []
+        if not song["album"]:
+            return [song_id]
+        who = (song["album_artist"] or song["artist"]).lower()
+        return [s["id"] for s in self._songs
+                if s["album"].lower() == song["album"].lower() and (s["album_artist"] or s["artist"]).lower() == who]
+
+    def set_banned(self, song_ids: list[int], banned: bool) -> int:
+        """Put songs on (or take them off) the never-play list. Returns how many songs changed."""
+        ids = [i for i in song_ids if i in self._by_id]
+        if not ids:
+            return 0
+        conn = self._connect()
+        try:
+            with conn:
+                marks = ",".join("?" * len(ids))
+                changed = conn.execute(f"UPDATE songs SET banned = ? WHERE banned != ? AND id IN ({marks})",
+                                       (int(banned), int(banned)) + tuple(ids)).rowcount
+        finally:
+            conn.close()
+        if changed:
+            self.reload(bump=True)
+        return changed
 
     def record_play(self, song_id: int) -> None:
         now = time.time()

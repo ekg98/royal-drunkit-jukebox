@@ -367,5 +367,54 @@ class HostAndSettingsTest(unittest.TestCase):
         self.assertIn("gen:Dance", ids)
 
 
+class NeverPlayTest(unittest.TestCase):
+    def test_banned_songs_cannot_be_added_by_anyone(self):
+        engine, _, _ = make_engine()
+        engine.set_never_play(3, "song", True)
+        self.assertEqual(codes(engine, "guest-aaaa", False, 3), "banned")
+        self.assertEqual(codes(engine, "host", True, 3), "banned")
+        engine.set_never_play(3, "song", False)
+        self.assertEqual(codes(engine, "guest-aaaa", False, 3), "ok")
+
+    def test_banning_removes_queued_copies_and_skips_the_current_song(self):
+        engine, player, _ = make_engine()
+        for song_id in (1, 2, 3):
+            engine.add_song("host", True, song_id)
+        engine.set_never_play(3, "song", True)
+        self.assertEqual([it["id"] for it in engine.queue], [2])
+        engine.set_never_play(1, "song", True)                       # 1 is playing right now
+        self.assertEqual(engine.current["id"], 2)
+        self.assertEqual(engine.queue, [])
+
+    def test_autofill_never_picks_a_banned_song(self):
+        engine, _, _ = make_engine(autofill=True)
+        engine.set_never_play(1, "song", True)
+        for _ in range(60):
+            engine._advance()
+            self.assertNotEqual(engine.current["id"], 1)
+            self.assertTrue(all(it["id"] != 1 for it in engine.queue))
+
+    def test_everything_banned_means_silence_not_a_crash(self):
+        engine, _, _ = make_engine(autofill=True)
+        for song in list(engine.lib.all()):
+            engine.set_never_play(song["id"], "song", True)
+        engine._advance()
+        self.assertIsNone(engine.current)
+
+    def test_banning_a_whole_album(self):
+        engine, _, _ = make_engine()
+        for song in engine.lib.all()[:3]:
+            song["album"] = "Night Drive"; song["artist"] = "Neon Kings"
+        changed = engine.set_never_play(1, "album", True)
+        self.assertEqual(changed, 3)
+        self.assertEqual(codes(engine, "guest-aaaa", False, 2), "banned")
+        self.assertEqual(codes(engine, "guest-aaaa", False, 4), "ok")
+
+    def test_unknown_song_is_an_error(self):
+        engine, _, _ = make_engine()
+        with self.assertRaises(EngineError):
+            engine.set_never_play(999, "song", True)
+
+
 if __name__ == "__main__":
     unittest.main()

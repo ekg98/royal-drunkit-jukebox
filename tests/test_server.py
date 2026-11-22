@@ -159,6 +159,19 @@ class ServerTest(unittest.TestCase):
         self.assertEqual((tidy.started, tidy.cancelled), (1, 1))
         self.assertNotIn("tidy", self.client.get("/api/state", headers=GUEST).get_json()["state"])
 
+    def test_never_play_endpoint(self):
+        self.assertEqual(self.post("/api/host/never-play", {"song_id": 2}).status_code, 403)    # guests refused
+        headers = self.host_headers()
+        reply = self.post("/api/host/never-play", {"song_id": 2, "banned": True}, headers).get_json()
+        self.assertEqual(reply["changed"], 1)
+        self.assertEqual(reply["state"]["banned_count"], 1)
+        self.assertEqual(self.post("/api/queue", {"song_id": 2}).status_code, 403)
+        songs = self.client.get("/api/songs").get_json()["songs"]
+        self.assertTrue(next(s for s in songs if s["id"] == 2)["banned"])
+        self.assertEqual(self.post("/api/host/never-play", {"song_id": 999}, headers).status_code, 404)
+        self.post("/api/host/never-play", {"song_id": 2, "banned": False}, headers)
+        self.assertEqual(self.post("/api/queue", {"song_id": 2}).status_code, 200)
+
     def test_popular(self):
         self.post("/api/queue", {"song_id": 5})
         self.assertEqual(self.client.get("/api/popular").get_json()["ids"], [5])

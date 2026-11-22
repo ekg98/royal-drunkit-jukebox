@@ -66,6 +66,18 @@ Host panel, **Tidy my library**. It looks up what your files are missing, using 
 - A song's `Unknown Artist` or missing title cannot be looked up. Fix those tags in the file (Asunder or Kid3 can do it).
 - Optional: put `contact = "you@example.com"` in `config.toml`; it is sent to MusicBrainz as a courtesy.
 
+## Never-play list
+
+Keep songs (or whole albums) from ever playing, for example the one nobody wants to hear at a party.
+
+- Unlock the Host panel, open any song, and choose **Never play this song** or **Never play this whole album**.
+  While a song is playing, the Host panel also has **Never play this song**; it bans the song and moves on.
+- Banned songs cannot be picked by guests or by auto-fill, and are pulled out of the queue. Guests do not see them at all.
+- The host still sees them dimmed with a NEVER PLAY tag. **Show never-play list** in the Host panel lists them;
+  open one and choose **Allow this song again**.
+- The list is kept in the jukebox's data folder and survives rescans and restarts. If you move or rename a song file,
+  the jukebox sees it as a new song, so ban it again.
+
 ## How it behaves
 
 - Guests get 3 credits (max 5, one new credit every 2 minutes). Add = 1 credit, Play next = 2. Host can switch to **free play**.
@@ -82,7 +94,7 @@ Host panel, **Tidy my library**. It looks up what your files are missing, using 
 python -m unittest discover -s tests -t .
 ```
 
-(104 tests; they need ffmpeg because they build real audio files. The mpv player is tested against a stand-in mpv.)
+(112 tests; they need ffmpeg because they build real audio files. The mpv player is tested against a stand-in mpv.)
 
 ## Layout
 

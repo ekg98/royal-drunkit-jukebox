@@ -148,6 +148,14 @@ def create_app(engine: Engine, library, static_dir: Path | str) -> Flask:
         started = library.scan_async(log=print)
         return jsonify(ok=True, started=started, state=state())
 
+    @app.post("/api/host/never-play")
+    def host_never_play():
+        require_host()
+        data = body()
+        scope = "album" if data.get("scope") == "album" else "song"
+        changed = engine.set_never_play(data.get("song_id"), scope, bool(data.get("banned", True)))
+        return jsonify(ok=True, changed=changed, state=state())
+
     def require_tidy():
         if engine.tidy is None:
             raise EngineError("no_tidy", "Tidy my library is not available.", 404)

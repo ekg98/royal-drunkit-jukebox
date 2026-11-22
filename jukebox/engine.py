@@ -225,6 +225,8 @@ class Engine:
             kind = "next" if kind == "next" else "add"
             if isinstance(song_id, bool) or not isinstance(song_id, int) or self.lib.get(song_id) is None:
                 raise EngineError("no_song", "That song is not in the library.", 404)
+            if self.lib.get(song_id).get("banned"):
+                raise EngineError("banned", "That song is on the never-play list.", 403)
             if self._in_queue(song_id):
                 raise EngineError("queued", "That song is already playing or queued.", 409)
 
@@ -340,6 +342,22 @@ class Engine:
             else:
                 raise EngineError("bad_action", f"Unknown action: {action}")
 
+    def set_never_play(self, song_id, scope: str, banned: bool) -> int:
+        """Host action: keep a song (or its whole album) from ever playing, or allow it again."""
+        with self.lock:
+            if isinstance(song_id, bool) or not isinstance(song_id, int) or self.lib.get(song_id) is None:
+                raise EngineError("no_song", "That song is not in the library.", 404)
+            ids = self.lib.album_ids(song_id) if scope == "album" else [song_id]
+            changed = self.lib.set_banned(ids, bool(banned))
+            if banned:
+                gone = set(ids)
+                self.queue = [it for it in self.queue if it["id"] not in gone]
+                if self.current is not None and self.current["id"] in gone:
+                    self._advance()
+                else:
+                    self._ensure_auto()
+            return changed
+
     # ---------- playback flow ----------
 
     def _mode_allows(self, song: dict) -> bool:
@@ -351,7 +369,7 @@ class Engine:
         return True
 
     def _pick_auto(self) -> int | None:
-        candidates = [s for s in self.lib.all() if not self._in_queue(s["id"])]
+        candidates = [s for s in self.lib.all() if not s.get("banned") and not self._in_queue(s["id"])]
         pool = [s for s in candidates if self._mode_allows(s)] or candidates   # never go silent over a mode
         fresh = [s for s in pool if s["id"] not in self.recent]
         choice = fresh or pool
@@ -489,4 +507,5 @@ class Engine:
                 state["modes"] = self.mode_options()
                 state["scan"] = self.lib.scan_status()
                 state["tidy"] = self.tidy.status() if self.tidy else None
+                state["banned_count"] = self.lib.banned_count()
             return state

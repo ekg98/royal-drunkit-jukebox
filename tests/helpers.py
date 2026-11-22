@@ -96,6 +96,25 @@ class FakeLibrary:
     def record_play(self, song_id): self.plays.append(song_id)
     def popular(self, hours=12, limit=12): return list(dict.fromkeys(self.plays))[:limit]
     def scan_status(self): return {"running": False, "done": 0, "total": 0, "last_report": None}
+    def banned_count(self): return sum(1 for s in self._songs if s.get("banned"))
+
+    def album_ids(self, song_id):
+        song = self._by_id.get(song_id)
+        if not song:
+            return []
+        if not song["album"]:
+            return [song_id]
+        return [s["id"] for s in self._songs if s["album"] == song["album"] and s["artist"] == song["artist"]]
+
+    def set_banned(self, song_ids, banned):
+        changed = 0
+        for i in song_ids:
+            if i in self._by_id and bool(self._by_id[i].get("banned")) != bool(banned):
+                self._by_id[i]["banned"] = bool(banned)
+                changed += 1
+        if changed:
+            self.version += 1
+        return changed
 
     def scan_async(self, log=print):
         self.scans += 1
@@ -103,7 +122,7 @@ class FakeLibrary:
 
     def api_songs(self):
         keys = ("id", "title", "artist", "album", "genre", "year", "dur", "added", "plays", "cover")
-        return [{k: s[k] for k in keys} for s in self._songs]
+        return [{**{k: s[k] for k in keys}, "banned": bool(s.get("banned"))} for s in self._songs]
 
     def genres(self):
         counts = {}

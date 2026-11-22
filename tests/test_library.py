@@ -164,5 +164,35 @@ class RescanTest(unittest.TestCase):
         self.assertFalse(self.lib.scan_status()["running"])
 
 
+class NeverPlayStorageTest(unittest.TestCase):
+    def test_ban_survives_a_rescan_and_a_restart_and_an_old_database_is_upgraded(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            music = build_sample_library(base / "music")
+            lib = Library(music, base / "data")
+            lib.scan()
+            target = next(s for s in lib.all() if s["title"] == "Neon Rain")
+            album = lib.album_ids(target["id"])
+            self.assertEqual(len(album), 2)                          # Neon Rain and Chrome Highway
+            self.assertEqual(lib.set_banned(album, True), 2)
+            self.assertEqual(lib.set_banned(album, True), 0)         # nothing new
+            version = lib.version
+            lib.scan()                                               # unchanged files: ban must stay
+            self.assertEqual(lib.banned_count(), 2)
+            again = Library(music, base / "data")                    # a restart
+            self.assertEqual(again.banned_count(), 2)
+            self.assertTrue(all("banned" in s for s in again.api_songs()))
+            self.assertEqual(again.set_banned(album, False), 2)
+            self.assertEqual(again.banned_count(), 0)
+            # a catalog from before this feature has no banned column
+            conn = sqlite3.connect(base / "data" / "library.db")
+            conn.execute("ALTER TABLE songs DROP COLUMN banned")
+            conn.commit(); conn.close()
+            upgraded = Library(music, base / "data")
+            self.assertEqual(upgraded.banned_count(), 0)
+            self.assertGreater(len(upgraded.all()), 3)
+
+
 if __name__ == "__main__":
     unittest.main()
