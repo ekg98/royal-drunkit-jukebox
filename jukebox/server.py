@@ -96,6 +96,16 @@ def create_app(engine: Engine, library, static_dir: Path | str) -> Flask:
     def popular():
         return jsonify(ok=True, ids=library.popular())
 
+    @app.get("/api/ratings")
+    def ratings():
+        return jsonify(ok=True, **engine.ratings_for(guest_id(), is_host()))
+
+    @app.post("/api/rate")
+    def rate():
+        data = body()
+        engine.rate(guest_id(), data.get("song_id"), data.get("vote"), is_host())
+        return jsonify(ok=True, **engine.ratings_for(guest_id(), is_host()))
+
     @app.get("/api/state")
     def get_state():
         return jsonify(ok=True, state=state())
@@ -147,6 +157,11 @@ def create_app(engine: Engine, library, static_dir: Path | str) -> Flask:
         require_host()
         started = library.scan_async(log=print)
         return jsonify(ok=True, started=started, state=state())
+
+    @app.post("/api/host/ratings/clear")
+    def host_clear_ratings():
+        require_host()
+        return jsonify(ok=True, cleared=engine.clear_ratings())
 
     @app.post("/api/host/never-play")
     def host_never_play():

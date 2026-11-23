@@ -194,5 +194,27 @@ class NeverPlayStorageTest(unittest.TestCase):
             self.assertGreater(len(upgraded.all()), 3)
 
 
+class RatingsStorageTest(unittest.TestCase):
+    def test_votes_are_saved_counted_and_cleared(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            music = build_sample_library(base / "music")
+            lib = Library(music, base / "data")
+            lib.scan()
+            a, b = [s["id"] for s in lib.all()[:2]]
+            lib.rate(a, "g1", 1); lib.rate(a, "g2", 1); lib.rate(a, "g3", -1); lib.rate(b, "g1", -1)
+            self.assertEqual(lib.rating_of(a), (2, 1))
+            self.assertEqual(lib.my_votes("g1"), {a: 1, b: -1})
+            lib.rate(a, "g1", -1)                                   # change of mind replaces, never adds
+            self.assertEqual(lib.rating_of(a), (1, 2))
+            lib.rate(a, "g3", 0)                                    # withdrawn
+            self.assertEqual(lib.rating_of(a), (1, 1))
+            again = Library(music, base / "data")                   # restart keeps the votes
+            self.assertEqual(again.rating_of(a), (1, 1))
+            self.assertEqual(again.rating_totals(), {a: [1, 1], b: [0, 1]})
+            self.assertEqual(again.clear_ratings(), 3)
+            self.assertEqual(again.rating_totals(), {})
+
+
 if __name__ == "__main__":
     unittest.main()

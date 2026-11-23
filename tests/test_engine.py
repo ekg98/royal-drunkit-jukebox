@@ -416,5 +416,74 @@ class NeverPlayTest(unittest.TestCase):
             engine.set_never_play(999, "song", True)
 
 
+class RatingsTest(unittest.TestCase):
+    def test_one_vote_per_guest_and_it_can_be_changed_or_taken_back(self):
+        engine, _, _ = make_engine()
+        engine.rate("guest-aaaa", 1, 1)
+        engine.rate("guest-aaaa", 1, 1)                      # the same vote again changes nothing
+        engine.rate("guest-bbbb", 1, 1)
+        self.assertEqual(engine.lib.rating_of(1), (2, 0))
+        engine.rate("guest-aaaa", 1, -1)                     # changed their mind
+        self.assertEqual(engine.lib.rating_of(1), (1, 1))
+        engine.rate("guest-aaaa", 1, 0)                      # took it back
+        self.assertEqual(engine.lib.rating_of(1), (1, 0))
+
+    def test_bad_ratings_are_refused(self):
+        engine, _, _ = make_engine()
+        for song_id, vote in ((999, 1), (1, 5), (1, True), (True, 1), ("1", 1), (1, "up"), (None, 1)):
+            with self.assertRaises(EngineError, msg=f"{song_id!r} {vote!r}"):
+                engine.rate("guest-aaaa", song_id, vote)
+
+    def test_guests_only_see_totals_when_the_host_allows_it(self):
+        engine, _, _ = make_engine()
+        engine.rate("guest-aaaa", 1, 1)
+        engine.rate("guest-bbbb", 2, -1)
+        seen = engine.ratings_for("guest-aaaa", False)
+        self.assertEqual(seen["mine"], {"1": 1})
+        self.assertEqual(seen["totals"], {"1": [1, 0], "2": [0, 1]})
+        engine.update_settings({"show_ratings": False})
+        hidden = engine.ratings_for("guest-aaaa", False)
+        self.assertEqual(hidden["totals"], {})                 # no totals for guests...
+        self.assertEqual(hidden["mine"], {})                   # ...and no thumbs of their own
+        with self.assertRaises(EngineError) as ctx:            # ...and they cannot vote any more
+            engine.rate("guest-aaaa", 3, 1)
+        self.assertEqual(ctx.exception.code, "ratings_off")
+        engine.rate("host", 3, 1, is_host=True)                # the host still can
+        engine.rate("host", 3, 0, is_host=True)
+        self.assertEqual(engine.ratings_for("guest-aaaa", True)["totals"], {"1": [1, 0], "2": [0, 1]})   # host always sees
+
+    def test_thumbs_steer_autofill_when_switched_on_and_not_when_off(self):
+        def share(influence):
+            engine, _, _ = make_engine(autofill=True)
+            engine.update_settings({"rating_autofill": influence, "autofill": True})
+            for i in range(8):
+                engine.rate(f"guest-up{i:03d}0", 1, 1)       # song 1: 8 thumbs up
+                engine.rate(f"guest-down{i:02d}0", 2, -1)    # song 2: 8 thumbs down
+            counts = {1: 0, 2: 0}
+            for _ in range(1500):
+                engine.recent.clear()
+                engine.queue.clear()
+                picked = engine._pick_auto()
+                if picked in counts:
+                    counts[picked] += 1
+            return counts
+        on, off = share(True), share(False)
+        self.assertGreater(on[1], on[2] * 8)                    # liked song far more often than the disliked one
+        self.assertGreater(on[2], 0)                            # but a disliked song is not banned outright
+        self.assertLess(abs(off[1] - off[2]), max(off[1], off[2]) * 0.6)   # off: no steering (just chance)
+
+    def test_weights_are_limited(self):
+        from jukebox.engine import rating_weight
+        self.assertEqual(rating_weight(0, 0), 1.0)
+        self.assertEqual(rating_weight(100, 0), 4.0)
+        self.assertEqual(rating_weight(0, 100), 0.15)
+
+    def test_clear_ratings(self):
+        engine, _, _ = make_engine()
+        engine.rate("guest-aaaa", 1, 1); engine.rate("guest-aaaa", 2, -1)
+        self.assertEqual(engine.clear_ratings(), 2)
+        self.assertEqual(engine.lib.rating_totals(), {})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -172,6 +172,28 @@ class ServerTest(unittest.TestCase):
         self.post("/api/host/never-play", {"song_id": 2, "banned": False}, headers)
         self.assertEqual(self.post("/api/queue", {"song_id": 2}).status_code, 200)
 
+    def test_ratings_endpoints(self):
+        other = {"X-Guest-Id": "guest-other-9999"}
+        reply = self.post("/api/rate", {"song_id": 2, "vote": 1}).get_json()
+        self.assertEqual(reply["mine"], {"2": 1})
+        self.assertEqual(reply["totals"]["2"], [1, 0])
+        self.post("/api/rate", {"song_id": 2, "vote": -1}, other)
+        self.assertEqual(self.client.get("/api/ratings", headers=other).get_json()["totals"]["2"], [1, 1])
+        self.assertEqual(self.post("/api/rate", {"song_id": 999, "vote": 1}).status_code, 404)
+        self.assertEqual(self.post("/api/rate", {"song_id": 2, "vote": 7}).status_code, 400)
+        headers = self.host_headers()
+        self.post("/api/host/settings", {"show_ratings": False}, headers)
+        hidden = self.client.get("/api/ratings", headers=other).get_json()
+        self.assertEqual(hidden["totals"], {})
+        self.assertEqual(hidden["mine"], {})
+        self.assertEqual(self.post("/api/rate", {"song_id": 2, "vote": 1}, other).status_code, 403)   # no voting while off
+        self.assertEqual(self.post("/api/rate", {"song_id": 4, "vote": 1}, headers).status_code, 200)  # the host still can
+        self.post("/api/rate", {"song_id": 4, "vote": 0}, headers)
+        self.assertEqual(self.client.get("/api/ratings", headers=headers).get_json()["totals"]["2"], [1, 1])
+        self.assertEqual(self.post("/api/host/ratings/clear", {}).status_code, 403)    # guests cannot clear
+        self.assertEqual(self.post("/api/host/ratings/clear", {}, headers).get_json()["cleared"], 2)
+        self.assertEqual(self.client.get("/api/ratings", headers=headers).get_json()["totals"], {})
+
     def test_popular(self):
         self.post("/api/queue", {"song_id": 5})
         self.assertEqual(self.client.get("/api/popular").get_json()["ids"], [5])

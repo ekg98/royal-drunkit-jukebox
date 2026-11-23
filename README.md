@@ -1,13 +1,13 @@
 # The Royal Drunkit Jukebox
 
-Version 0.4.1 (see [CHANGELOG.md](CHANGELOG.md); `python3 run.py --version` shows the installed one).
+Version 0.5.2 (see [CHANGELOG.md](CHANGELOG.md); `python3 run.py --version` shows the installed one).
 
 A free, TouchTunes-style jukebox you run on your own computer or a Raspberry Pi. Guests pick songs from a phone or tablet
 web page; the host controls credits, free play and party modes.
 
 **Status:** The library scanner, queue, credits, voting, party modes, host panel, the neon web page, real playback
-(through mpv, to the computer's audio output such as the headphone jack) and "Tidy my library" (look up missing cover
-art, years and genres online) are built. Not yet built: several Bluetooth speakers at once.
+(through mpv, to the computer's audio output such as the headphone jack), "Tidy my library" (look up missing cover
+art, years and genres online), the never-play list and guest thumbs up / thumbs down ratings are built. Not yet built: several Bluetooth speakers at once.
 
 ## What you need
 
@@ -98,6 +98,8 @@ Relative folders in `config.toml` are relative to the file's own folder.
 | Guest play | Credits, or Free play | Credits |
 | Party mode | Anything goes, a decade night, or a genre night (only the decades and genres your library has) | Anything goes |
 | Auto-fill when the queue is empty | on / off | on |
+| Guests' thumbs change what auto-fill picks | on / off | on |
+| Guests can rate songs and see ratings | on / off | on |
 | Most credits a guest can hold | 3, 5, 8, 10 | 5 |
 | A new credit arrives every | 1, 2, 5, 10 minutes | 2 minutes |
 | Votes needed to skip | 2 to 6 | 3 |
@@ -111,6 +113,8 @@ folder, and start it again: `start_credits` (credits a new guest starts with, 0 
 | Pause / Play, Skip now, Clear queue | Control what is playing and the queue (host songs cost no credits) |
 | Rescan music folder | Reads new or changed files (the first scan of thousands of songs takes a few minutes) |
 | Tidy my library / Stop tidying | Looks up missing cover art, years and genres online; see [Tidy my library](#tidy-my-library) |
+| Show most disliked | Lists songs with more thumbs down than up, worst first; open one to ban it |
+| Clear all ratings | Wipes every thumbs up and down (asks you to tap twice) |
 | Never play this song | Bans the song that is playing right now and moves on |
 | Show never-play list | Shows the banned songs so you can allow them again; see [Never-play list](#never-play-list) |
 | Preview idle screen | Shows the idle screen right now |
@@ -147,6 +151,25 @@ Host panel, **Tidy my library**. It looks up what your files are missing, using 
 - A song's `Unknown Artist` or missing title cannot be looked up. Fix those tags in the file (Asunder or Kid3 can do it).
 - Optional: put `contact = "you@example.com"` in `config.toml`; it is sent to MusicBrainz as a courtesy.
 
+## Guest ratings
+
+While a song plays, the now-playing card has a thumbs up and a thumbs down. A guest taps one to vote, taps it again to take
+the vote back, or taps the other to change their mind. Each phone gets one vote per song.
+
+- **Auto-fill:** with *Guests' thumbs change what auto-fill picks* on, liked songs come up more often and disliked
+  songs less often. Each net thumbs up makes a song half a share more likely (at most 4 times as likely); each net thumbs
+  down makes it less likely (at least 15% as likely, so a disliked song is rare, not banned). Only the thumbs steer
+  auto-fill. Turn the switch off and auto-fill ignores ratings. The party mode still applies either way.
+- **Top rated:** a sort on the All songs page and a row on the Home page, best first. They only appear while
+  *Guests can rate songs and see ratings* is on (for you too), so turning it off hides Top rated everywhere. *Popular tonight* (most played in the
+  last 12 hours) works as before.
+- **Guests can rate songs and see ratings:** on, guests get the thumbs and see the totals and Top rated. Off, ratings
+  disappear for guests completely: no thumbs, no totals, no Top rated, and the jukebox refuses their votes. You, as host,
+  keep the thumbs and still see the totals on a song's page and in Show most disliked. Votes already given are kept.
+- **Most disliked:** Host panel, **Show most disliked**. Open a song there to see its totals and to put it on the never-play list.
+- **Clear all ratings** starts a fresh night. Ratings are otherwise kept across restarts.
+- A guest who clears their browser's data looks like a new guest and can vote again. That is fine for a game room.
+
 ## Never-play list
 
 Keep songs (or whole albums) from ever playing, for example the one nobody wants to hear at a party.
@@ -175,7 +198,7 @@ Keep songs (or whole albums) from ever playing, for example the one nobody wants
 python -m unittest discover -s tests -t .
 ```
 
-(117 tests; they need ffmpeg because they build real audio files. The mpv player is tested against a stand-in mpv.)
+(125 tests; they need ffmpeg because they build real audio files. The mpv player is tested against a stand-in mpv.)
 
 ## Layout
 

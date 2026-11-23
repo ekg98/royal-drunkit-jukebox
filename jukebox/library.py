@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS songs (
     banned INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS play_log (song_id INTEGER NOT NULL, ts REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS ratings (
+    song_id INTEGER NOT NULL,
+    guest TEXT NOT NULL,
+    vote INTEGER NOT NULL,
+    ts REAL NOT NULL,
+    PRIMARY KEY (song_id, guest)
+);
 CREATE TABLE IF NOT EXISTS tidy_cache (
     key TEXT PRIMARY KEY,
     status TEXT NOT NULL,
@@ -106,6 +113,7 @@ class Library:
         self._lock = threading.RLock()
         self._songs: list[dict] = []
         self._by_id: dict[int, dict] = {}
+        self._ratings: dict[int, list[int]] = {}        # song id -> [thumbs up, thumbs down]
         conn = self._connect()
         try:
             with conn:
@@ -116,6 +124,7 @@ class Library:
         finally:
             conn.close()
         self.reload(bump=False)
+        self._load_ratings()
 
     # ---------- database ----------
 
@@ -181,6 +190,59 @@ class Library:
     def decades(self) -> list[tuple[str, int]]:
         counts = Counter(decade_label(s["year"]) for s in self._songs if s["year"])
         return sorted(counts.items(), key=lambda kv: decade_start(kv[0]))
+
+    # ---------- guest ratings (thumbs up / thumbs down) ----------
+
+    def _load_ratings(self) -> None:
+        conn = self._connect()
+        try:
+            rows = conn.execute("SELECT song_id, "
+                                "SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM ratings GROUP BY song_id").fetchall()
+        finally:
+            conn.close()
+        with self._lock:
+            self._ratings = {r["song_id"]: [r["up"] or 0, r["down"] or 0] for r in rows}
+
+    def rate(self, song_id: int, guest: str, vote: int) -> None:
+        """Record a guest's vote: 1 = thumbs up, -1 = thumbs down, 0 = take the vote back. One vote per guest per song."""
+        conn = self._connect()
+        try:
+            with conn:
+                if vote == 0:
+                    conn.execute("DELETE FROM ratings WHERE song_id = ? AND guest = ?", (song_id, guest))
+                else:
+                    conn.execute("INSERT OR REPLACE INTO ratings (song_id, guest, vote, ts) VALUES (?,?,?,?)",
+                                 (song_id, guest, vote, time.time()))
+        finally:
+            conn.close()
+        self._load_ratings()
+
+    def my_votes(self, guest: str) -> dict[int, int]:
+        conn = self._connect()
+        try:
+            rows = conn.execute("SELECT song_id, vote FROM ratings WHERE guest = ?", (guest,)).fetchall()
+        finally:
+            conn.close()
+        return {r["song_id"]: r["vote"] for r in rows if r["song_id"] in self._by_id}
+
+    def rating_of(self, song_id: int) -> tuple[int, int]:
+        up, down = self._ratings.get(song_id, (0, 0))
+        return up, down
+
+    def rating_totals(self) -> dict[int, list[int]]:
+        """Songs that have any votes: id -> [up, down]."""
+        with self._lock:
+            return {i: list(v) for i, v in self._ratings.items() if i in self._by_id and (v[0] or v[1])}
+
+    def clear_ratings(self) -> int:
+        conn = self._connect()
+        try:
+            with conn:
+                count = conn.execute("DELETE FROM ratings").rowcount
+        finally:
+            conn.close()
+        self._load_ratings()
+        return count
 
     # ---------- the never-play list ----------
 

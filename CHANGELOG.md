@@ -8,6 +8,21 @@ match before a release.
 Versions are `major.minor.patch`: a new feature raises the middle number, a fix or documentation change the last.
 Dates are when the version was built.
 
+## 0.5.2 - 2026-11-22
+- With *Guests can rate songs and see ratings* off, guests no longer get the thumbs buttons and the jukebox refuses
+  their votes (before, they could still vote without seeing totals). The host keeps the thumbs.
+
+## 0.5.1 - 2026-11-22
+- The demo preview page now has the same Host switches and buttons as the real jukebox (guest ratings, never-play list),
+  so what you see in a preview matches the real thing.
+- **Top rated** is hidden everywhere, including for the host, while *Guests can see ratings* is off.
+
+## 0.5.0 - 2026-11-22
+- **Guest ratings.** Thumbs up and thumbs down on the now-playing card, one vote per guest per song.
+- Two new Host switches: *Guests' thumbs change what auto-fill picks* and *Guests can see ratings*.
+- **Top rated** sort and Home row; **Show most disliked** and **Clear all ratings** in the Host panel.
+  Ratings are kept across restarts.
+
 ## 0.4.1 - 2026-11-22
 - Version number shown by `--version`, at startup and in the Host panel, with a warning if the page and the jukebox differ.
 - README: a table of every command-line option, config.toml setting, Host panel setting and per-screen setting.

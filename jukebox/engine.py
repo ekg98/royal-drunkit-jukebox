@@ -65,7 +65,14 @@ SETTING_SPECS = {
     "vote_need": (3, _int_range(1, 20)),
     "free_play": (False, _boolean),
     "queue_max": (10, _int_range(1, 50)),
+    "rating_autofill": (True, _boolean),      # guests' thumbs change what auto-fill picks
+    "show_ratings": (True, _boolean),         # guests can give and see ratings (off: no thumbs, no totals, no Top rated)
 }
+
+# How much a song's thumbs change its chance of being auto-filled: each net thumbs up adds half a share,
+# a song can become at most 4 times as likely, and never less than 15% as likely (the never-play list is for "never").
+def rating_weight(up: int, down: int) -> float:
+    return max(0.15, min(4.0, 1.0 + 0.5 * (up - down)))
 
 
 @dataclass
@@ -287,6 +294,32 @@ class Engine:
                 return True
             return False
 
+    # ---------- ratings ----------
+
+    def rate(self, gid: str, song_id, vote, is_host: bool = False) -> None:
+        """A guest's thumbs up (1), thumbs down (-1) or taking the vote back (0)."""
+        with self.lock:
+            if not is_host and not self.settings["show_ratings"]:
+                raise EngineError("ratings_off", "Ratings are turned off.", 403)
+            if isinstance(song_id, bool) or not isinstance(song_id, int) or self.lib.get(song_id) is None:
+                raise EngineError("no_song", "That song is not in the library.", 404)
+            if isinstance(vote, bool) or vote not in (1, -1, 0):
+                raise EngineError("bad_vote", "A rating is a thumbs up or a thumbs down.", 400)
+            self._guest(gid, self.clock())
+            self.lib.rate(song_id, gid, vote)
+
+    def ratings_for(self, gid: str, is_host: bool) -> dict:
+        """Totals are only included when the host lets guests see ratings (the host always sees them)."""
+        with self.lock:
+            show = bool(self.settings["show_ratings"]) or is_host
+            return {"show": bool(self.settings["show_ratings"]),
+                    "mine": {str(k): v for k, v in self.lib.my_votes(gid).items()} if show else {},
+                    "totals": {str(k): v for k, v in self.lib.rating_totals().items()} if show else {}}
+
+    def clear_ratings(self) -> int:
+        with self.lock:
+            return self.lib.clear_ratings()
+
     # ---------- host ----------
 
     def host_login(self, pin, ip: str) -> str:
@@ -374,7 +407,12 @@ class Engine:
         pool = [s for s in candidates if self._mode_allows(s)] or candidates   # never go silent over a mode
         fresh = [s for s in pool if s["id"] not in self.recent]
         choice = fresh or pool
-        return self.rng.choice(choice)["id"] if choice else None
+        if not choice:
+            return None
+        if self.settings["rating_autofill"]:
+            weights = [rating_weight(*self.lib.rating_of(s["id"])) for s in choice]
+            return self.rng.choices(choice, weights=weights, k=1)[0]["id"]
+        return self.rng.choice(choice)["id"]
 
     def _ensure_auto(self) -> None:
         """Keep one auto-fill song lined up so the 'Up next' list is never empty."""
@@ -502,6 +540,7 @@ class Engine:
                 "mode": self.settings["mode"],
                 "player": getattr(self.player, "name", "unknown"),
                 "host": is_host,
+                "show_ratings": bool(self.settings["show_ratings"]),
             }
             if is_host:
                 state["settings"] = dict(self.settings)

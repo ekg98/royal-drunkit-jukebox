@@ -98,6 +98,37 @@ class FakeLibrary:
     def scan_status(self): return {"running": False, "done": 0, "total": 0, "last_report": None}
     def banned_count(self): return sum(1 for s in self._songs if s.get("banned"))
 
+    # ratings
+    def rate(self, song_id, guest, vote):
+        if not hasattr(self, "_votes_by"):
+            self._votes_by = {}
+        if vote == 0:
+            self._votes_by.pop((song_id, guest), None)
+        else:
+            self._votes_by[(song_id, guest)] = vote
+
+    def _tally(self):
+        tally = {}
+        for (song_id, _), vote in getattr(self, "_votes_by", {}).items():
+            entry = tally.setdefault(song_id, [0, 0])
+            entry[0 if vote == 1 else 1] += 1
+        return tally
+
+    def rating_of(self, song_id):
+        up, down = self._tally().get(song_id, [0, 0])
+        return up, down
+
+    def rating_totals(self):
+        return self._tally()
+
+    def my_votes(self, guest):
+        return {sid: v for (sid, g), v in getattr(self, "_votes_by", {}).items() if g == guest}
+
+    def clear_ratings(self):
+        count = len(getattr(self, "_votes_by", {}))
+        self._votes_by = {}
+        return count
+
     def album_ids(self, song_id):
         song = self._by_id.get(song_id)
         if not song:
