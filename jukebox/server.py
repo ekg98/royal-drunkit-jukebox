@@ -1,12 +1,14 @@
 """The web layer: serves the jukebox page and a small JSON API for it."""
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 from . import __version__
+from .config import DEFAULT_NAME
 from .engine import Engine, EngineError
 
 GUEST_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
@@ -69,7 +71,15 @@ def create_app(engine: Engine, library, static_dir: Path | str) -> Flask:
 
     @app.get("/")
     def index():
-        resp = send_from_directory(static_dir, "index.html")
+        if engine.name == DEFAULT_NAME:
+            resp = send_from_directory(static_dir, "index.html")
+        else:
+            # put the arcade's own name into the page before it is sent, so nobody sees the default one flash by
+            page = (Path(static_dir) / "index.html").read_text(encoding="utf-8")
+            safe = html.escape(engine.name, quote=True)
+            page = page.replace("<title>Royal Drunkit Jukebox</title>", f"<title>{safe} Jukebox</title>")
+            page = page.replace(">The Royal Drunkit<", f">{safe}<")
+            resp = Response(page, mimetype="text/html")
         resp.headers["Cache-Control"] = "no-cache"
         return resp
 

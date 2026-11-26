@@ -1,6 +1,6 @@
 # The Royal Drunkit Jukebox
 
-Version 0.5.2 (see [CHANGELOG.md](CHANGELOG.md); `python3 run.py --version` shows the installed one).
+Version 0.5.8 (see [CHANGELOG.md](CHANGELOG.md); `python3 run.py --version` shows the installed one).
 
 A free, TouchTunes-style jukebox you run on your own computer or a Raspberry Pi. Guests pick songs from a phone or tablet
 web page; the host controls credits, free play and party modes.
@@ -66,6 +66,7 @@ There are four places to change how the jukebox behaves. Later ones win over ear
 | `--port N` | Web port | `8080` |
 | `--host ADDRESS` | Network address to listen on (`127.0.0.1` = this computer only) | `0.0.0.0` (everything on your network) |
 | `--pin PIN` | PIN for the Host panel | `1234` |
+| `--name "My Arcade"` | Name of your arcade, shown in the page title, top bar, TV view and idle screen (up to 40 characters) | `The Royal Drunkit` |
 | `--audio-device NAME` | Audio output for mpv | the system's default output |
 | `--list-audio-devices` | Print the outputs mpv can use, then exit | |
 | `--simulate` | No sound, pretend to play (for testing) | off |
@@ -84,6 +85,7 @@ There are four places to change how the jukebox behaves. Later ones win over ear
 | `port` | Same as `--port` | `8080` |
 | `host` | Same as `--host` | `"0.0.0.0"` |
 | `host_pin` | Same as `--pin`. Change it. | `"1234"` |
+| `arcade_name` | Same as `--name` | `"The Royal Drunkit"` |
 | `audio_device` | Same as `--audio-device` | system default |
 | `simulate` | `true` = no sound (same as `--simulate`) | `false` |
 | `contact` | Your email or web page, sent to MusicBrainz by "Tidy my library" as a courtesy | empty |

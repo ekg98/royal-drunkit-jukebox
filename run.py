@@ -75,12 +75,13 @@ def main() -> int:
 
     player = make_player(config)
     engine = Engine(library, player, config.data_dir / "settings.json", config.host_pin)
+    engine.name = config.arcade_name
     engine.tidy = Tidy(library, contact=config.contact)
     engine.start()
     app = create_app(engine, library, ROOT / "static")
 
     print()
-    print(f"The Royal Drunkit Jukebox {__version__}")
+    print(f"{config.arcade_name} Jukebox (version {__version__})")
     if player.name == "simulated":
         print("NOTE: playback is simulated. The queue, credits and screens are real, but no sound comes out.")
     else:

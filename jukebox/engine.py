@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import __version__
+from .config import DEFAULT_NAME
 from .library import decade_label
 
 
@@ -97,6 +98,7 @@ class Engine:
     def __init__(self, library, player, settings_path: Path | str | None, host_pin: str,
                  clock=time.time, rng: random.Random | None = None):
         self.lib = library
+        self.name = DEFAULT_NAME  # the arcade's name; run.py sets it from the settings
         self.tidy = None          # set by run.py: the "Tidy my library" helper
         self.player = player
         self.host_pin = str(host_pin)
@@ -540,6 +542,7 @@ class Engine:
                 "mode": self.settings["mode"],
                 "player": getattr(self.player, "name", "unknown"),
                 "host": is_host,
+                "name": self.name,
                 "show_ratings": bool(self.settings["show_ratings"]),
             }
             if is_host:

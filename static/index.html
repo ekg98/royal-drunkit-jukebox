@@ -337,7 +337,7 @@
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1>The Royal Drunkit</h1>
+      <h1 data-arcade>The Royal Drunkit</h1>
       <p class="tag">Jukebox &middot; Pick a tune</p>
     </div>
     <div class="head-right">
@@ -467,7 +467,7 @@
 <div class="tv" id="tv" hidden>
   <canvas class="scene-canvas" id="tvScene" aria-hidden="true"></canvas>
   <button class="round mid tv-exit" id="tvExit" type="button" aria-label="Exit TV view"></button>
-  <p class="tv-brand">The Royal Drunkit</p>
+  <p class="tv-brand" data-arcade>The Royal Drunkit</p>
   <div class="tv-main">
     <div class="tv-cover" id="tvCover"></div>
     <div class="tv-info">
@@ -485,7 +485,7 @@
 <!-- Attract screen -->
 <div class="attract" id="attract" role="dialog" aria-modal="true" aria-label="Touch the screen to pick a song" tabindex="-1" hidden>
   <canvas class="scene-canvas" id="attractScene" aria-hidden="true"></canvas>
-  <p class="big">The Royal Drunkit</p>
+  <p class="big" data-arcade>The Royal Drunkit</p>
   <div class="stage" id="stage"></div>
   <div class="afoot">
     <p class="prompt">Touch the screen to pick a song</p>
@@ -564,7 +564,16 @@
   var loaded = false;
   var libVersion = -1;
   var popularIds = [];
-  var PAGE_VERSION = '0.5.2';
+  var PAGE_VERSION = '0.5.8';
+  /* The arcade's name comes from the jukebox's settings (arcade_name); this is the default. */
+  var arcadeName = 'The Royal Drunkit';
+  function setArcadeName(name) {
+    if (typeof name !== 'string' || !name || name === arcadeName) return;
+    arcadeName = name;
+    var spots = document.querySelectorAll('[data-arcade]');
+    for (var i = 0; i < spots.length; i++) spots[i].textContent = name;
+    document.title = name + ' Jukebox';
+  }
   var RATES = {}, MINE = {}, ratesSig = '', showSeen = true;
   var RAW = [], SONGS = [], BYID = {}, ARTISTS = [], POP = [], FRESH = [], GENRES = [], DECADES = [];
   var GENRE_COUNT = {}, DECADE_COUNT = {}, MODES = {};
@@ -601,9 +610,11 @@
       gc[s.genre] = (gc[s.genre] || 0) + 1;
       if (s.decade) dc[s.decade] = (dc[s.decade] || 0) + 1;
       var a = am[s.artist];
-      if (!a) a = am[s.artist] = { name: s.artist, count: 0, hue: s.hue, motif: s.motif, cover: null, genres: Object.create(null), search: s.artist.toLowerCase() };
+      if (!a) a = am[s.artist] = { name: s.artist, count: 0, hue: s.hue, motif: s.motif, cover: null, genres: Object.create(null), decades: Object.create(null), ids: [], newest: Infinity, plays: 0, search: s.artist.toLowerCase() };
       a.count++;
       a.genres[s.genre] = (a.genres[s.genre] || 0) + 1;
+      if (s.decade) a.decades[s.decade] = true;
+      a.ids.push(s.id); a.plays += s.plays || 0; if (s.added < a.newest) a.newest = s.added;
       if (!a.cover && s.cover) a.cover = s.cover;
     });
     RAW.forEach(function (s) { if (!BYID[s.id]) BYID[s.id] = s; });          // songs on the never-play list stay known
@@ -698,7 +709,7 @@
     host: false, voteNeed: 3, autofill: true, mode: 'all', volume: 75,
     credits: 3, creditMax: 5, refillMin: 2, nextCredit: 0, freePlay: false, scan: null, tidy: null, version: '', showRatings: true, ratingAuto: true, disliked: false, hostSettings: null, bannedCount: 0, banned: false,
     attractMin: 2,
-    q: '', genre: 'All', decade: 'All', artist: '', letter: '', sort: 'az', limit: PAGE,
+    q: '', genre: 'All', decade: 'All', aLetter: '', artist: '', stash: null, letter: '', sort: 'az', limit: PAGE,
     view: 'home', kb: false, qExpanded: false, tv: false
   };
 
@@ -919,7 +930,12 @@
     return b;
   }
 
+  /* Opening one artist's songs shows all of them, so the shared filters are put aside and come back afterwards. */
+  function restoreStash() {
+    if (state.stash) { state.genre = state.stash.genre; state.decade = state.stash.decade; state.sort = state.stash.sort; state.letter = state.stash.letter; state.stash = null; }
+  }
   function goSongs(opts) {
+    if (opts && opts.artist && !state.stash) state.stash = { genre: state.genre, decade: state.decade, sort: state.sort, letter: state.letter };
     state.genre = 'All'; state.decade = 'All'; state.artist = ''; state.letter = ''; state.sort = 'az'; state.banned = false; state.disliked = false;
     for (var k in opts) state[k] = opts[k];
     state.view = 'songs'; state.limit = PAGE;
@@ -979,6 +995,10 @@
         var s1b = section('Top rated', function () { goSongs({ sort: 'top' }); });
         var r1b = el('div', 'hrow'); tops.forEach(function (s) { r1b.appendChild(songTile(s)); });
         s1b.appendChild(r1b); v.appendChild(s1b);
+      } else {
+        var s1c = section('Top rated');
+        s1c.appendChild(el('p', 'empty', 'Nothing rated yet. Give a song a thumbs up and it shows up here.'));
+        v.appendChild(s1c);
       }
     }
 
@@ -1045,7 +1065,7 @@
       var chip = el('button', 'chip active', 'Artist: ' + state.artist + '  ✕');
       chip.type = 'button';
       chip.setAttribute('aria-label', 'Clear artist filter ' + state.artist);
-      chip.addEventListener('click', function () { state.artist = ''; re(); });
+      chip.addEventListener('click', function () { state.artist = ''; restoreStash(); re(); });
       bar.appendChild(chip);
     }
     if (state.banned) {
@@ -1079,14 +1099,40 @@
 
   function artistsView(v) {
     var terms = state.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    function re() { renderBrowse(); }
+    function artistScore(a) { var t = 0; for (var i = 0; i < a.ids.length; i++) t += scoreOf(a.ids[i]); return t; }
+    var sorts = state.showRatings ? ['az', 'new', 'pop', 'top'] : ['az', 'new', 'pop'];
+    if (sorts.indexOf(state.sort) < 0) state.sort = 'az';
+    v.appendChild(chipRow('Sort', sorts, state.sort, function (x) { state.sort = x; re(); }, ''));
+    var sortChips = v.lastChild.children, sortNames = ['A–Z', 'Recently added', 'Popular tonight', 'Top rated'];
+    for (var si = 0; si < sortChips.length; si++) sortChips[si].textContent = sortNames[si];
+    v.appendChild(chipRow('Genre', ['All'].concat(GENRES.slice(0, 40)), state.genre, function (x) { state.genre = x; re(); }, 'All genres'));
+    v.appendChild(chipRow('Decade', ['All'].concat(DECADES), state.decade, function (x) { state.decade = x; re(); }, 'All decades'));
+    function letterOf(a) { var c = a.name.charAt(0).toUpperCase(); return c >= 'A' && c <= 'Z' ? c : '#'; }
+    var az = el('div', 'az'); az.setAttribute('role', 'group'); az.setAttribute('aria-label', 'Jump to letter');
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('').forEach(function (L) {
+      var b = el('button', null, L); b.type = 'button';
+      b.setAttribute('aria-pressed', String(state.aLetter === L));
+      b.setAttribute('aria-label', 'Artists starting with ' + (L === '#' ? 'a number or symbol' : L));
+      b.addEventListener('click', function () { state.aLetter = state.aLetter === L ? '' : L; re(); });
+      az.appendChild(b);
+    });
+    v.appendChild(az);
     var list = ARTISTS.filter(function (a) {
+      if (state.genre !== 'All' && !a.genres[state.genre]) return false;
+      if (state.decade !== 'All' && !a.decades[state.decade]) return false;
+      if (state.aLetter && letterOf(a) !== state.aLetter) return false;
+      if (state.sort === 'top' && artistScore(a) <= 0) return false;
       for (var i = 0; i < terms.length; i++) { if (a.search.indexOf(terms[i]) === -1) return false; }
       return true;
     });
+    if (state.sort === 'new') list = list.slice().sort(function (x, y) { return x.newest - y.newest; });
+    else if (state.sort === 'pop') list = list.slice().sort(function (x, y) { return y.plays - x.plays; });
+    else if (state.sort === 'top') list = list.slice().sort(function (x, y) { return artistScore(y) - artistScore(x); });
     var bar = el('div', 'resultsbar');
     bar.appendChild(el('span', 'count', list.length + ' artists'));
     v.appendChild(bar);
-    if (!list.length) { v.appendChild(el('p', 'empty', 'No artists match that search.')); return; }
+    if (!list.length) { v.appendChild(el('p', 'empty', 'No artists match. Try a different search or clear a filter.')); return; }
     var grid = el('div', 'grid');
     list.forEach(function (a) {
       var b = el('button', 'tile'); b.type = 'button';
@@ -1108,7 +1154,10 @@
       var b = el('button', 'tab', p[1]); b.type = 'button';
       b.setAttribute('aria-pressed', String(state.view === p[0]));
       b.addEventListener('click', function () {
-        if (p[0] === 'songs' && state.view !== 'songs') { state.genre = 'All'; state.decade = 'All'; state.artist = ''; state.letter = ''; state.banned = false; state.disliked = false; }
+        /* Sort, genre and decade are shared by All songs and Artists and kept between visits. Only the one-off views
+           (one artist's songs, the host's never-play and most-disliked lists) are dropped when you leave them. */
+        if (state.artist && state.view !== p[0]) { state.artist = ''; restoreStash(); }
+        if (p[0] === 'songs' && state.view !== 'songs') { state.banned = false; state.disliked = false; }
         state.view = p[0]; state.limit = PAGE; renderBrowse();
       });
       box.appendChild(b);
@@ -2477,6 +2526,7 @@
     state.host = !!st.host;
     state.bannedCount = st.banned_count || 0;
     state.version = st.version || '';
+    setArcadeName(st.name);
     var hadShow = state.showRatings;
     state.showRatings = st.show_ratings !== false;
     if (hadShow !== state.showRatings || wasHost !== state.host) setTimeout(refreshRatings, 0);

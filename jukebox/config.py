@@ -13,6 +13,15 @@ from . import __version__
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PIN = "1234"
+DEFAULT_NAME = "The Royal Drunkit"
+MAX_NAME = 40
+
+
+def clean_name(raw) -> str:
+    """The arcade's name as shown on the screens: one line, no control characters, at most 40 characters."""
+    text = " ".join(str(raw or "").split())
+    text = "".join(ch for ch in text if ch.isprintable())[:MAX_NAME].strip()
+    return text or DEFAULT_NAME
 
 
 @dataclass
@@ -28,6 +37,7 @@ class Config:
     simulate: bool = False
     list_audio: bool = False
     contact: str = ""
+    arcade_name: str = DEFAULT_NAME
 
 
 def load(argv: list[str] | None = None) -> Config:
@@ -40,6 +50,7 @@ def load(argv: list[str] | None = None) -> Config:
     parser.add_argument("--host", help="address to listen on (default 0.0.0.0, every network interface)")
     parser.add_argument("--port", type=int, help="web port (default 8080)")
     parser.add_argument("--pin", help="host PIN for the Host panel")
+    parser.add_argument("--name", help=f'name of your arcade, shown on the screens (default "{DEFAULT_NAME}")')
     parser.add_argument("--song-seconds", type=float,
                         help="pretend every song lasts this many seconds (for testing the simulated player)")
     parser.add_argument("--audio-device", help="audio output for mpv (see --list-audio-devices); default is the system's")
@@ -77,4 +88,5 @@ def load(argv: list[str] | None = None) -> Config:
         simulate=bool(args.simulate or args.song_seconds or values.get("simulate", False)),
         list_audio=args.list_audio_devices,
         contact=str(values.get("contact", "")),
+        arcade_name=clean_name(args.name or values.get("arcade_name")),
     )

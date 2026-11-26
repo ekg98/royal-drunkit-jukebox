@@ -8,6 +8,31 @@ match before a release.
 Versions are `major.minor.patch`: a new feature raises the middle number, a fix or documentation change the last.
 Dates are when the version was built.
 
+## 0.5.8 - 2026-11-25
+- The home page's **Top rated** row now always shows while guest ratings are on. Until a song gets a thumbs-up it says
+  "Nothing rated yet" instead of being missing.
+
+## 0.5.7 - 2026-11-25
+- **All songs** and **Artists** now share the same Sort, Genre and Decade choices, so a filter you set on one is still on when
+  you switch to the other. The A-Z letter stays separate (one is title letters, the other artist letters). Opening one
+  artist's songs puts your filters aside and brings them back when you leave it.
+
+## 0.5.6 - 2026-11-25
+- Switching between **All songs** and **Artists** (or Home) now keeps the Sort, Genre, Decade and letter choices you made on
+  each screen. Coming back to All songs still leaves any single-artist or host list view.
+
+## 0.5.5 - 2026-11-25
+- The **Artists** screen has the same Sort row as All songs: A-Z, Recently added (by an artist's newest song), Popular tonight
+  (plays of all their songs) and Top rated (thumbs across all their songs; hidden while guest ratings are off).
+
+## 0.5.4 - 2026-11-25
+- The **Artists** screen now has the same Genre and Decade rows as All songs, plus an A-Z jump bar (with # for names that
+  start with a number or symbol). An artist matches a genre or decade if any of their songs does.
+
+## 0.5.3 - 2026-11-25
+- The arcade's name is now a setting: `arcade_name = "My Arcade"` in `config.toml`, or `--name "My Arcade"`. It shows in
+  the browser tab, the top bar, the TV view and the idle screen. The default is still "The Royal Drunkit".
+
 ## 0.5.2 - 2026-11-22
 - With *Guests can rate songs and see ratings* off, guests no longer get the thumbs buttons and the jukebox refuses
   their votes (before, they could still vote without seeing totals). The host keeps the thumbs.

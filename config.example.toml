@@ -19,3 +19,7 @@ host_pin = "1234"
 # Optional: your email address or web page. "Tidy my library" sends it to MusicBrainz so they can contact you
 # if the jukebox ever misbehaves. Leave it empty if you prefer; it works either way.
 # contact = "you@example.com"
+
+# The name of your arcade, shown at the top of the page, on the TV view and on the idle screens
+# (up to 40 characters). Leave it out to keep the default.
+# arcade_name = "The Royal Drunkit"
