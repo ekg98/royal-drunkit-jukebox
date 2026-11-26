@@ -8,6 +8,9 @@ match before a release.
 Versions are `major.minor.patch`: a new feature raises the middle number, a fix or documentation change the last.
 Dates are when the version was built.
 
+## 0.5.9 - 2026-11-26
+- Added the MIT `LICENSE` and a `.gitignore` (keeps `config.toml`, `data/` and your music out of GitHub).
+
 ## 0.5.8 - 2026-11-25
 - The home page's **Top rated** row now always shows while guest ratings are on. Until a song gets a thumbs-up it says
   "Nothing rated yet" instead of being missing.

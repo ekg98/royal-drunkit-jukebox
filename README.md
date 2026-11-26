@@ -1,6 +1,6 @@
 # The Royal Drunkit Jukebox
 
-Version 0.5.8 (see [CHANGELOG.md](CHANGELOG.md); `python3 run.py --version` shows the installed one).
+Version 0.5.9 (see [CHANGELOG.md](CHANGELOG.md); `python3 run.py --version` shows the installed one).
 
 A free, TouchTunes-style jukebox you run on your own computer or a Raspberry Pi. Guests pick songs from a phone or tablet
 web page; the host controls credits, free play and party modes.
@@ -208,6 +208,11 @@ python -m unittest discover -s tests -t .
 - `static/index.html` — the neon page. If it cannot reach a server it runs as a demo with made-up songs.
 - `tools/make_sample_music.py` — fake songs for trying things out
 - `CHANGELOG.md` — what changed in each version
+- `LICENSE` — MIT license: free to use, change and share
 
 The page loads two fonts from Google Fonts; with no internet it falls back to system fonts.
 The built-in web server is Flask's development server, fine for a basement on a home network.
+
+## License
+
+MIT, copyright (c) 2026 William English (ekg98). Free to use, change and share; see [LICENSE](LICENSE).

@@ -1,0 +1,19 @@
+# Your own settings (they hold your host PIN) - share config.example.toml instead
+config.toml
+
+# Your catalog, cover art, ratings and saved Host settings
+data/
+
+# Your music
+music/
+music-demo/
+
+# Python leftovers
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor and system leftovers
+.DS_Store
+*.swp
